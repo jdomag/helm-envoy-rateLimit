@@ -1,0 +1,23 @@
+{{- if .Values.statsd.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    prometheus: kube-prometheus
+    release: prometheus-operator
+  name: {{ include "go-ratelimit.fullname" . }}
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    path: {{ .Values.statsd.serviceMonitor.path | default "/metrics" }}
+    port: statsd-metrics
+  jobLabel: {{ include "go-ratelimit.fullname" . }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "go-ratelimit.selectorLabels" . | nindent 6 }}
+
+{{- end -}}

@@ -1,0 +1,125 @@
+# Default values for ..
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: envoyproxy/ratelimit
+  tag: v1.4.0
+  pullPolicy: IfNotPresent
+
+# imagePullSecrets: []
+# nameOverride: ""
+# fullnameOverride: ""
+
+podLabels: {}
+podAnnotations: {}
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+pdb:
+  enabled: true
+
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+
+resources:
+  limits:
+    memory: 128Mi
+  requests:
+    cpu: 0.1
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+priorityClassName: "microservice"
+
+podDisruptionBudget: {}
+
+redisUrl: "redis.shared"
+redisSocketType: "tcp"
+redisPort: 6379
+
+debugPort: 6070
+grpcPort: 8081
+httpPort: 8080
+
+
+logLevel: debug
+logFormat: JSON
+
+virtualHosts:
+  - name: my-rules
+    config: |-
+      ---
+      domain: my-rules
+      descriptors:
+        - key: generic_key
+          value: ec.europa.eu
+          rate_limit:
+            unit: hour
+            requests_per_unit: 3
+        - key: generic_key
+          value: edition.cnn.com
+          rate_limit:
+            unit: hour
+            requests_per_unit: 3
+
+
+redish:
+  enabled: false
+
+# if istio is enabled there will be EnvoyFilter configured to add cluster config and ratelimit HTTP filter to istio
+istio:
+  enabled: false
+  # select which workloads will be affected
+  # if you leave it empty it will apply to every istio enabled pod
+  workloadSelector: {}
+    #labels:
+    #  app: bastion-box
+
+  # domain can be anything! Match it to the ratelimter service config
+  domain: my-rules
+  failure_mode_deny: "true"
+
+
+# Statsd is used to export a metrics from ratelimiter
+statsd:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+  image:
+    repository: prom/statsd-exporter
+    tag: v0.18.0
+
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 0.1
+      memory: 64Mi

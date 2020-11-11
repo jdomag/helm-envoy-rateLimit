@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-ratelimit.fullname" . }}
+  labels:
+    {{- include "go-ratelimit.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "go-ratelimit.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print .Template.BasePath "/configmap.yaml") . | sha256sum }}
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        sidecar.istio.io/inject: "false"
+      labels:
+        {{- include "go-ratelimit.selectorLabels" . | nindent 8 }}
+{{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 8 }}
+{{- end }}
+    spec:
+      priorityClassName: "{{ .Values.priorityClassName }}"
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "go-ratelimit.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: statsd
+          image: {{ .Values.statsd.image.repository }}:{{ .Values.statsd.image.tag }}
+          imagePullPolicy: {{ .Values.statsd.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: statsd-stats
+              containerPort: 9125
+            - name: statsd-metrics
+              containerPort: 9102
+          resources:
+            {{- toYaml .Values.statsd.resources | nindent 12 }}
+        - env:
+          - name: LOG_LEVEL
+            value: {{ .Values.logLevel }}
+          - name: LOG_FORMAT
+            value: {{ .Values.logFormat }}
+          - name: REDIS_SOCKET_TYPE
+            value: {{ .Values.redisSocketType }}
+          - name: REDIS_URL
+            value: {{ .Values.redisUrl }}:{{ .Values.redisPort }}
+          - name: RUNTIME_ROOT
+            value: /data
+          - name: RUNTIME_SUBDIRECTORY
+            value: ratelimit
+          - name: RUNTIME_IGNOREDOTFILES
+            value: "true"
+          - name: USE_STATSD
+            value: {{ .Values.statsd.enabled | quote }}
+          {{- if .Values.statsd.enabled }}
+          - name: STATSD_HOST
+            value: "localhost"
+          - name: STATSD_PORT
+            value: "9125"
+          {{- end}}
+          - name: RUNTIME_WATCH_ROOT
+            value: "false"
+          name: {{ .Chart.Name }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent"}}
+          command: ["/bin/ratelimit"]
+          ports:
+            - name: http-debug 
+              containerPort: {{ .Values.debugPort }}
+            - name: grpc-server
+              containerPort: {{ .Values.grpcPort }}
+            - name: http-server
+              containerPort: {{ .Values.httpPort }}
+{{- if .Values.virtualHosts }}
+          volumeMounts:
+          - mountPath: /data/ratelimit/config
+            name: commonconfig-volume
+{{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      volumes:
+{{- if .Values.virtualHosts }}
+      - name: commonconfig-volume
+        projected:
+          defaultMode: 420
+          sources:
+{{- range .Values.virtualHosts }}
+          - configMap:
+              name: {{ include "go-ratelimit.fullname" $ }}-{{ .name }}
+{{- end }}
+{{- end }}
