@@ -79,11 +79,6 @@ virtualHosts:
       domain: my-rules
       descriptors:
         - key: generic_key
-          value: ec.europa.eu
-          rate_limit:
-            unit: hour
-            requests_per_unit: 3
-        - key: generic_key
           value: edition.cnn.com
           rate_limit:
             unit: hour
